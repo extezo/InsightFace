@@ -1,5 +1,4 @@
 FROM nvcr.io/nvidia/tensorrt:23.05-py3
-
 ENV LC_ALL=C.UTF-8
 ENV LANG=C.UTF-8
 ENV PIP_INSTALL="python -m pip --no-cache-dir install --upgrade"
@@ -23,5 +22,5 @@ RUN $PIP_INSTALL cupy-cuda12x pynvjpeg
 WORKDIR /app
 COPY api_trt /app
 
-ENTRYPOINT [ "bash" ]
+ENTRYPOINT ["bash"]
 CMD ["entrypoint.sh"]

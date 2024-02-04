@@ -1,11 +1,11 @@
 #!/bin/bash
 
-echo Starting backend.
+echo Starting backend using "$NUM_WORKERS" workers.
 
 exec gunicorn --log-level info\
-     -w 1\
      -k uvicorn.workers.UvicornWorker\
+     -w "$NUM_WORKERS"\
      --keep-alive 60\
      --timeout 60\
      --log-file=-\
-     app.api:app -b 0.0.0.0:8000
+     backend_api:app -b 0.0.0.0:"$BACKEND_INNER_PORT"

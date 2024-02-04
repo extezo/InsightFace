@@ -10,10 +10,6 @@ class Images(BaseModel):
 class BodyExtract(BaseModel):
     images: Images
     extract_embedding: Optional[bool] = pydantic.Field(default=True,
-                                                        example=True,
-                                                        description='Extract face embeddings (otherwise only detect \
+                                                       example=True,
+                                                       description='Extract face embeddings (otherwise only detect \
                                                        faces)')
-
-# class BodyExtractResponse(BaseModel):
-#     took: List[str]
-#     data:

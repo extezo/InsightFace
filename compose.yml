@@ -1,12 +1,15 @@
 services:
-  insightface:
+  insightface-gpu:
     build: 
       context: ./InsightFace-REST
       dockerfile: Dockerfile_trt
+    env_file:
+      - InsightFace-REST/insightface.env
+      - .env
     ports: 
-      - "${START_PORT}:${PORT}"
+      - "$INSIGHTFACE_OUTER_PORT:$INSIGHTFACE_INNER_PORT"
     healthcheck:
-      test: ["CMD", curl -f http://localhost:18081/info || exit 1]
+      test: ["CMD", curl -f http://localhost:$INSIGHTFACE_OUTER_PORT/info || exit 1]
       interval: 1m
       timeout: 10s
       retries: 3
@@ -16,7 +19,7 @@ services:
         target: /models
       - type: bind
         source: ./InsightFace-REST/api_trt
-        target: /app
+        target: /api
     deploy:
       resources:
         reservations:
@@ -25,9 +28,34 @@ services:
               count: 1
               capabilities: [gpu]
 
+  insightface-cpu:
+    build:
+      context: ./InsightFace-REST
+      dockerfile: Dockerfile_cpu
+    env_file:
+      - InsightFace-REST/insightface.env
+      - .env
+    ports:
+      - "$INSIGHTFACE_OUTER_PORT:$INSIGHTFACE_INNER_PORT"
+    healthcheck:
+      test: [ "CMD", curl -f http://localhost:$INSIGHTFACE_OUTER_PORT/info || exit 1 ]
+      interval: 1m
+      timeout: 10s
+      retries: 3
+    volumes:
+      - type: bind
+        source: ./InsightFace-REST/models
+        target: /models
+      - type: bind
+        source: ./InsightFace-REST/api_trt
+        target: /api
+
   backend:
+    env_file:
+      - backend/backend.env
+      - .env
     build:
       context: ./backend
       dockerfile: Dockerfile
     ports:
-      - "8000:8000"
+      - "$BACKEND_OUTER_PORT:$BACKEND_INNER_PORT"

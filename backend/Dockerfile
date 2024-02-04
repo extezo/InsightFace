@@ -8,7 +8,7 @@ COPY requirements.txt .
 RUN $PIP_INSTALL -r requirements.txt
 
 WORKDIR /app
-COPY . /app
+COPY api /app
 
-ENTRYPOINT [ "bash" ]
+ENTRYPOINT ["bash"]
 CMD ["entrypoint.sh"]

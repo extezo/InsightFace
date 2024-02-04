@@ -3,7 +3,7 @@ Multiservice application for face resemblance calculation using InsightFace-REST
 
 # Requirements:
 
-* NVIDIA GPU
+* NVIDIA GPU (optional)
 
 ## Linux
 * Packages: docker and docker-compose
@@ -13,4 +13,9 @@ Multiservice application for face resemblance calculation using InsightFace-REST
 
 # Usage
 1. Open terminal and go to project directory
-2. Run `docker compose up`
+
+### GPU
+2. Run `docker compose up backend insightface-gpu`
+
+### CPU
+2. Run `docker compose up backend insightface-cpu`
