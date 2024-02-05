@@ -6,6 +6,7 @@ from modules.interfaces.InsightFaceInterface import BodyExtract, Images
 import httpx
 import numpy as np
 
+# Think about CPU version
 URL = "http://insightface-gpu:18080"
 
 app = FastAPI()
