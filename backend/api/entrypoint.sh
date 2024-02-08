@@ -1,5 +1,6 @@
 #!/bin/bash
 echo Starting backend using "$NUM_WORKERS" workers.
+
 exec gunicorn --log-level info\
      -k uvicorn.workers.UvicornWorker\
      -w "$NUM_WORKERS"\

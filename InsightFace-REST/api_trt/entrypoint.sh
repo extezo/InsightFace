@@ -1,5 +1,6 @@
 #!/bin/bash
 echo Preparing models...
+
 python prepare_models.py
 echo Starting InsightFace-REST using "$NUM_WORKERS" workers.
 exec gunicorn --log-level info\
