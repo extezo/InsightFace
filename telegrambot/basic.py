@@ -1,37 +1,44 @@
+from telegrambot.handlers import images_events
+
 from aiogram import Bot, Dispatcher
+from aiogram.enums import ContentType
 from aiogram.filters import Command
 from aiogram.types import Message
 import os
+import asyncio
+from random import randint
+
+from aiogram import Bot, Dispatcher, F
+from aiogram.filters import Command
+from aiogram.types import Message, KeyboardButton, ReplyKeyboardMarkup
+from aiogram import types
+from aiogram.types import FSInputFile
+from aiogram.types import ReplyKeyboardRemove, \
+    ReplyKeyboardMarkup, KeyboardButton, \
+    InlineKeyboardMarkup, InlineKeyboardButton
+import os
+
+from aiogram.utils.keyboard import ReplyKeyboardBuilder, InlineKeyboardBuilder
 
 # Вместо BOT TOKEN HERE нужно вставить токен вашего бота, полученный у @BotFather
-BOT_TOKEN = os.environ['telegramBotToken']
-
-# Создаем объекты бота и диспетчера
-bot = Bot(token=BOT_TOKEN)
-dp = Dispatcher()
 
 
-# Этот хэндлер будет срабатывать на команду "/start"
-@dp.message(Command(commands=["start"]))
-async def process_start_command(message: Message):
-    await message.answer('Привет!\nМеня зовут Эхо-бот!\nНапиши мне что-нибудь')
+async def main():
+    bot = Bot(token=os.environ['telegramBotToken'])
+    dp = Dispatcher()
+
+    dp.include_routers(images_events.router)
 
 
-# Этот хэндлер будет срабатывать на команду "/help"
-@dp.message(Command(commands=['help']))
-async def process_help_command(message: Message):
-    await message.answer(
-        'Напиши мне что-нибудь и в ответ '
-        'я пришлю тебе твое сообщение'
-    )
+    # Альтернативный вариант регистрации роутеров по одному на строку
+    # dp.include_router(questions.router)
+    # dp.include_router(different_types.router)
+
+    # Запускаем бота и пропускаем все накопленные входящие
+    # Да, этот метод можно вызвать даже если у вас поллинг
+    await bot.delete_webhook(drop_pending_updates=True)
+    await dp.start_polling(bot)
 
 
-# Этот хэндлер будет срабатывать на любые ваши текстовые сообщения,
-# кроме команд "/start" и "/help"
-@dp.message()
-async def send_echo(message: Message):
-    await message.reply(text=message.text)
-
-
-if __name__ == '__main__':
-    dp.run_polling(bot)
+if __name__ == "__main__":
+    asyncio.run(main())
