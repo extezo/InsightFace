@@ -24,23 +24,27 @@ redis = Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
 
 @app.middleware("http")
 async def middleware(request: Request, call_next):
-    if ("user_id" not in request.cookies) or (not await redis.get(request.cookies["user_id"])):
-        request, cookie = await check_cookie(request)
+    if not await redis.get(request.cookies["user_id"]):
+        await redis.set(request.cookies["user_id"], User().json())
+    elif "user_id" not in request.cookies:
+        request, cookie = await set_cookie(request)
         response = await call_next(request)
         response.set_cookie(key="user_id", value=cookie)
-    else:
-        response = await call_next(request)
+        return response
+    response = await call_next(request)
     return response
 
 
-async def check_cookie(request: Request):
+async def set_cookie(request: Request):
     cookie = uuid.uuid4().__str__()
     await redis.set(cookie, User().json())
-    for i, entry in enumerate(request.scope["headers"]):
-        if b'cookie' in entry[0]:
-            request.scope["headers"][i] = (b'cookie', f'user_id={cookie}'.encode("UTF-8"))
-            return request, cookie
-    request.scope["headers"].append((b'cookie', f'user_id={cookie}'.encode("UTF-8")))
+    if not request.cookies:
+        request.scope["headers"].append((b'cookie', f'user_id={cookie}'.encode("UTF-8")))
+    else:
+        for i, entry in enumerate(request.scope["headers"]):
+            if b'cookie' in entry[0]:
+                request.scope["headers"][i][1] += (f'user_id={cookie}'.encode("UTF-8"),)
+                return request, cookie
     return request, cookie
 
 

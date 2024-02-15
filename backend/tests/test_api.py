@@ -8,7 +8,7 @@ from httpx import Client
 from backend.api.modules.interfaces.FrontendInterface import UploadImages, SelectFace
 
 client = Client()
-client_existing = Client(cookies={"user_id": "554d5ec5-63cb-48d5-b7c9-601ee050124e"})
+client_existing = Client(cookies={"user_id": "554d5ec5-63cb-48d5-b7c9-601ee0501242"})
 URL = "http://localhost:8000"
 
 
