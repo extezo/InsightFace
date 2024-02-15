@@ -2,18 +2,14 @@ import json
 import os
 import uuid
 from hashlib import md5
-from typing import Union, Annotated
+from typing import Annotated
 
-from fastapi import FastAPI, Response, Request, Cookie, Depends
-from fastapi.encoders import jsonable_encoder
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, Request, Cookie
 
 from modules.interfaces.RedisInterface import User, Image
-from modules.interfaces.FrontendInterface import UploadImages, SelectFace
+from modules.interfaces.FrontendInterface import SelectFace
 from modules.interfaces.InsightFaceInterface import BodyExtract, Images
 from redis.asyncio import Redis
-from redis.exceptions import ConnectionError
 import httpx
 import numpy as np
 
@@ -26,17 +22,26 @@ app = FastAPI()
 redis = Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
 
 
-@app.get("/set_user_id")
-async def set_cookie(request: Request):
-    response = JSONResponse(content="cookie check")
+@app.middleware("http")
+async def middleware(request: Request, call_next):
     if ("user_id" not in request.cookies) or (not await redis.get(request.cookies["user_id"])):
-        print("Setting cookie...", flush=True)
-        cookie = uuid.uuid4().__str__()
-        await redis.set(cookie, User().json())
-        response.set_cookie("user_id", cookie)
-        print("Cookie set: " + cookie, flush=True)
+        request, cookie = await check_cookie(request)
+        response = await call_next(request)
+        response.set_cookie(key="user_id", value=cookie)
+    else:
+        response = await call_next(request)
     return response
 
+
+async def check_cookie(request: Request):
+    cookie = uuid.uuid4().__str__()
+    await redis.set(cookie, User().json())
+    for i, entry in enumerate(request.scope["headers"]):
+        if b'cookie' in entry[0]:
+            request.scope["headers"][i] = (b'cookie', f'user_id={cookie}'.encode("UTF-8"))
+            return request, cookie
+    request.scope["headers"].append((b'cookie', f'user_id={cookie}'.encode("UTF-8")))
+    return request, cookie
 
 
 @app.post("/test_alive")
@@ -53,13 +58,10 @@ async def test_alive(user_id: Annotated[str, Cookie()]):
             result["REDIS"] = "Online"
         except TimeoutError as e:
             result["REDIS"] = "Offline"
-    result["cc"] = user_id
-    print(result.__str__(), flush=True)
+    result["user_id"] = user_id
     return result
 
 
-# Add images' IDs and user ID
-# Merge BodyUploadImages and BodyExtract by changing schema on frontend side
 @app.post("/upload_images")
 async def upload_images(images: Images, user_id: Annotated[str, Cookie()]):
 

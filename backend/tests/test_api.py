@@ -6,21 +6,15 @@ from hashlib import md5
 from fastapi.encoders import jsonable_encoder
 from httpx import Client
 from backend.api.modules.interfaces.FrontendInterface import UploadImages, SelectFace
-from backend.api.modules.interfaces.InsightFaceInterface import Images
 
 client = Client()
-client_existing = Client(cookies={"user_id": "57dbf943-266a-4e92-a15c-8a473f105440"})
+client_existing = Client(cookies={"user_id": "554d5ec5-63cb-48d5-b7c9-601ee050124e"})
 URL = "http://localhost:8000"
 
 
 def test_set_cookie():
     response = client.get(URL + "/set_user_id")
     assert response.cookies == client.cookies
-
-
-def simulate_existing_user():
-
-    return client
 
 
 def test_alive():
@@ -31,7 +25,7 @@ def test_alive():
     # assert response.json() == {"msg": "I am alive!"}
 
 
-def test_upload_images_and_select_facesD():
+def test_upload_images_and_select_faces():
     client = client_existing
     images = []
     test_images = ["test_images/Stallone.jpg", "test_images/3faces.jpg"]
