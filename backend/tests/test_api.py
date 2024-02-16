@@ -40,6 +40,7 @@ def test_upload_images_and_select_faces():
     response = response.json()
     faces = SelectFace()
     random.seed(131231)
+    #Я кривозубый крестьянин, или тут лучше сделать len(response["image_ids"]), иначе длинна всегда 2?
     for i in range(len(response)):
         faces.id[response["image_ids"][i]] = (int(random.random() * (len(response["bboxes"][i])-1)))
     response = client.post(URL+"/select_faces", json=faces.dict())

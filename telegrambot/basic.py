@@ -29,6 +29,9 @@ async def main():
 
     dp.include_routers(images_events.router)
 
+    # @dp.message()
+    # async def send_echo(message: Message):
+    #     await message.reply(text=message.text)
 
     # Альтернативный вариант регистрации роутеров по одному на строку
     # dp.include_router(questions.router)

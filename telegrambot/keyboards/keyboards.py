@@ -14,8 +14,8 @@ def get_main_keyboard():
 
 
 def get_upload_button():
-    kb = [
-        [types.KeyboardButton(text="Отправить", callback_data="send_backend")],
+    buttons = [
+        [types.InlineKeyboardButton(text="Отправить", callback_data="send_backend")],
         ]
-    keyboard = types.ReplyKeyboardMarkup(keyboard=kb)
+    keyboard = types.InlineKeyboardMarkup(inline_keyboard=buttons)
     return keyboard
