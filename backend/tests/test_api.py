@@ -1,9 +1,6 @@
 import base64
-import os
 import random
-from hashlib import md5
 
-from fastapi.encoders import jsonable_encoder
 from httpx import Client
 from backend.api.modules.interfaces.FrontendInterface import UploadImages, SelectFace
 

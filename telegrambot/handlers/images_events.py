@@ -39,10 +39,10 @@ async def download_photo(message: Message, bot: Bot):
     # current_images.append(message.photo[-1])
     # print(len(current_images))
     # print(current_images)
-    await bot.download(
-        message.photo[-1],
-        destination=f"C:/Users\myzg\Desktop/frombot/{message.photo[-1].file_id}.jpg"
-    )
+    #await bot.download(
+    #    message.photo[-1],
+     #   destination=f"C:/Users\myzg\Desktop/frombot/{message.photo[-1].file_id}.jpg"
+   # )
     print(fp.read())
     await bot.download(
         message.photo[-1],

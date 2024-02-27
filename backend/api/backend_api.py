@@ -5,6 +5,7 @@ from hashlib import md5
 from typing import Annotated
 
 from fastapi import FastAPI, Request, Cookie
+from starlette.middleware.cors import CORSMiddleware
 
 from modules.interfaces.RedisInterface import User, Image
 from modules.interfaces.FrontendInterface import SelectFace
@@ -21,23 +22,44 @@ REDIS_PORT = int(os.environ["REDIS_PORT"])
 app = FastAPI()
 redis = Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
 
+origins = [
+    "http://26.213.115.119",
+    "http://26.177.193.242",
+    "http://26.69.151.64",
+    "http://localhost",
+    "http://localhost",
+    f"http://{REDIS_HOST}",
+    f"http://{URL_IF}",
+    "http://localhost:5173"
+    "http://localhost:9000"
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 @app.middleware("http")
 async def middleware(request: Request, call_next):
-    if not await redis.get(request.cookies["user_id"]):
-        await redis.set(request.cookies["user_id"], User().json())
-    elif "user_id" not in request.cookies:
+    print(request.scope, flush=True)
+    if "user_id" not in request.cookies:
         request, cookie = await set_cookie(request)
         response = await call_next(request)
         response.set_cookie(key="user_id", value=cookie)
         return response
+    elif not await redis.get(request.cookies["user_id"]):
+        await redis.set(request.cookies["user_id"], User().model_dump_json())
     response = await call_next(request)
     return response
 
 
 async def set_cookie(request: Request):
     cookie = uuid.uuid4().__str__()
-    await redis.set(cookie, User().json())
+    await redis.set(cookie, User().model_dump_json())
     if not request.cookies:
         request.scope["headers"].append((b'cookie', f'user_id={cookie}'.encode("UTF-8")))
     else:
@@ -53,14 +75,14 @@ async def test_alive(user_id: Annotated[str, Cookie()]):
     result = {"backend": "Online"}
     with httpx.Client() as client:
         try:
-            resp = client.get(URL_IF + "/info")
+            client.get(URL_IF + "/info")
             result["InsightFace"] = "Online"
         except httpx.TimeoutException as e:
             result["InsightFace"] = "Offline"
         try:
             await redis.ping()
             result["REDIS"] = "Online"
-        except TimeoutError as e:
+        except TimeoutError:
             result["REDIS"] = "Offline"
     result["user_id"] = user_id
     return result
@@ -82,7 +104,7 @@ async def upload_images(images: Images, user_id: Annotated[str, Cookie()]):
     for i in range(len(images_to_extract.data)):
         image_id = md5(images_to_extract.data[i].encode()).hexdigest()
         user.images[image_id] = Image(bboxes=bboxes[i], vectors=vectors[i])
-    await redis.set(user_id, user.json())
+    await redis.set(user_id, user.model_dump_json())
     bboxes = []
     for image_id in images_ids:
         bboxes.append(user.images[image_id].bboxes)
