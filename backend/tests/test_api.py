@@ -1,8 +1,9 @@
 import base64
 import random
 
+import numpy as np
 from httpx import Client
-from backend.api.modules.interfaces.FrontendInterface import UploadImages, SelectFace
+from backend.api.modules.interfaces.FrontendInterface import UploadImages, SelectFace, SelectFaces
 
 client = Client()
 client_existing = Client(cookies={"user_id": "554d5ec5-63cb-48d5-b7c9-601ee0501242"})
@@ -35,13 +36,15 @@ def test_upload_images_and_select_faces():
     assert len(response.json()) > 0
 
     response = response.json()
-    faces = SelectFace()
-    random.seed(131231)
-    #Я кривозубый крестьянин, или тут лучше сделать len(response["image_ids"]), иначе длинна всегда 2?
-    for i in range(len(response)):
-        faces.id[response["image_ids"][i]] = (int(random.random() * (len(response["bboxes"][i])-1)))
-    response = client.post(URL+"/select_faces", json=faces.dict())
+    faces = SelectFaces()
+    random.seed(12312312312)
+    for i in range(len(response["image_ids"])):
+        faces.id[response["image_ids"][i]] = np.arange(1 + int(random.random() * (len(response["bboxes"][i])-1))).tolist()
+    response = client.post(URL+"/select_faces", json=faces.model_dump())
     assert response.status_code == 200
-    assert len(response.json()["table"]) == len(faces.id)
-    assert len(response.json()["table"][0]) == len(faces.id)
+    table_size = 0
+    for bboxes in faces.id.values():
+        table_size += len(bboxes)
+    assert len(response.json()["table"]) == table_size
+    assert len(response.json()["table"][0]) == table_size
 

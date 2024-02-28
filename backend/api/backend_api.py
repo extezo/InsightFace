@@ -8,7 +8,7 @@ from fastapi import FastAPI, Request, Cookie
 from starlette.middleware.cors import CORSMiddleware
 
 from modules.interfaces.RedisInterface import User, Image
-from modules.interfaces.FrontendInterface import SelectFace
+from modules.interfaces.FrontendInterface import SelectFace, SelectFaces
 from modules.interfaces.InsightFaceInterface import BodyExtract, Images
 from redis.asyncio import Redis
 import httpx
@@ -22,21 +22,10 @@ REDIS_PORT = int(os.environ["REDIS_PORT"])
 app = FastAPI()
 redis = Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
 
-origins = [
-    "http://26.213.115.119",
-    "http://26.177.193.242",
-    "http://26.69.151.64",
-    "http://localhost",
-    "http://localhost",
-    f"http://{REDIS_HOST}",
-    f"http://{URL_IF}",
-    "http://localhost:5173"
-    "http://localhost:9000"
-]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -111,8 +100,8 @@ async def upload_images(images: Images, user_id: Annotated[str, Cookie()]):
     return {"image_ids": images_ids, "bboxes": bboxes}
 
 
-@app.post("/select_faces")
-async def select_faces(faces: SelectFace, user_id: Annotated[str, Cookie()]):
+@app.post("/select_face")
+async def select_face(faces: SelectFace, user_id: Annotated[str, Cookie()]):
     user = User(**json.loads(await redis.get(user_id)))
     vectors = []
     face_ids = []
@@ -127,6 +116,25 @@ async def select_faces(faces: SelectFace, user_id: Annotated[str, Cookie()]):
             y = np.array(vectors[j][face_ids[j]])
             sim_table[i, j] = (1 + np.dot(x, y)) / 2 * 100
     return {"image_ids": list(faces.id.keys()), "table": sim_table.tolist()}
+
+
+@app.post("/select_faces")
+async def select_faces(faces: SelectFaces, user_id: Annotated[str, Cookie()]):
+    user = User(**json.loads(await redis.get(user_id)))
+    vectors = []
+    face_ids = []
+    for image_id, faces_id in faces.id.items():
+        for face_id in faces_id:
+            vectors.append(user.images[image_id].vectors)
+            face_ids.append(face_id)
+    face_ids = np.array(face_ids)
+    sim_table = np.zeros((face_ids.size, face_ids.size))
+    for i in range(face_ids.size):
+        for j in range(face_ids.size):
+            x = np.array(vectors[i][face_ids[i]])
+            y = np.array(vectors[j][face_ids[j]])
+            sim_table[i, j] = (1 + np.dot(x, y)) / 2 * 100
+    return {"table": sim_table.tolist()}
 
 
 async def extract(data):
