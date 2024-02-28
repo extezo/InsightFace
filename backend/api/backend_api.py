@@ -1,6 +1,7 @@
 import json
 import os
 import uuid
+from datetime import timedelta
 from hashlib import md5
 from typing import Annotated
 
@@ -34,7 +35,16 @@ app.add_middleware(
 
 @app.middleware("http")
 async def middleware(request: Request, call_next):
-    print(request.scope, flush=True)
+    print("scope: " + request.scope.__str__(), flush=True)
+    print("cookies: " + request.cookies.__str__(), flush=True)
+    body = await request.body()
+    if body is not b'' and body is not None:
+        if "data" not in await request.json():
+            print("json: " + str(body), flush=True)
+        else:
+            print("json: images")
+    else:
+        print("json: None")
     if "user_id" not in request.cookies:
         request, cookie = await set_cookie(request)
         response = await call_next(request)
@@ -43,6 +53,7 @@ async def middleware(request: Request, call_next):
     elif not await redis.get(request.cookies["user_id"]):
         await redis.set(request.cookies["user_id"], User().model_dump_json())
     response = await call_next(request)
+    await redis.expire(request.cookies["user_id"], timedelta(hours=48))
     return response
 
 
@@ -121,6 +132,7 @@ async def select_face(faces: SelectFace, user_id: Annotated[str, Cookie()]):
 @app.post("/select_faces")
 async def select_faces(faces: SelectFaces, user_id: Annotated[str, Cookie()]):
     user = User(**json.loads(await redis.get(user_id)))
+    print(user_id, flush=True)
     vectors = []
     face_ids = []
     for image_id, faces_id in faces.id.items():
