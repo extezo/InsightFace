@@ -1,4 +1,4 @@
-from telegrambot.handlers import images_events
+from telegrambot.handlers import images_events2,images_events
 
 from aiogram import Bot, Dispatcher
 from aiogram.enums import ContentType
@@ -27,7 +27,8 @@ async def main():
     bot = Bot(token=os.environ['telegramBotToken'])
     dp = Dispatcher()
 
-    dp.include_routers(images_events.router)
+    dp.include_routers(images_events2.router)
+
 
     # @dp.message()
     # async def send_echo(message: Message):
@@ -40,7 +41,9 @@ async def main():
     # Запускаем бота и пропускаем все накопленные входящие
     # Да, этот метод можно вызвать даже если у вас поллинг
     await bot.delete_webhook(drop_pending_updates=True)
+    print("BOT IS READY")
     await dp.start_polling(bot)
+
 
 
 if __name__ == "__main__":

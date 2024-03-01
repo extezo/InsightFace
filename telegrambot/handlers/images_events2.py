@@ -1,19 +1,30 @@
+import os
 import random
+from typing import Dict, Any
+import numpy as np
+
 
 from PIL import ImageFont
 from aiogram import types
 import io
 from hashlib import md5
 from aiogram import Router, F, Bot
-from aiogram.client import bot
 from aiogram.filters import Command
 from aiogram.types import Message, InputFile, BufferedInputFile
-from telegrambot.keyboards.keyboards import get_main_keyboard, get_upload_button,get_upload_btn
+from redis.asyncio import Redis
+
+from telegrambot.keyboards.keyboards import get_main_keyboard, get_upload_button, get_upload_btn,gen_select_face_keyboard
 import base64
 from httpx import Client
 from telegrambot.api.modules.interfaces.FrontendInterface import UploadImages, SelectFace
+from telegrambot.api.modules.interfaces.TelegramEntities import TelegramUser
 from telegrambot.api.modules.interfaces.InsightFaceInterface import BodyExtract, Images
 from PIL import Image, ImageDraw
+
+# REDIS_HOST = os.environ["REDIS_HOST"]
+# REDIS_PORT = int(os.environ["REDIS_PORT"])
+#
+# redis = Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
 
 router = Router()  # [1]
 current_images = []
@@ -23,10 +34,10 @@ images_ids = []
 
 URL = "http://26.113.24.68:8000"
 
-csb = ['nan']
+users: dict[int, TelegramUser] = {}
 
 
-@router.message(Command("start"))  # [2]
+@router.message(Command("start"))  #
 async def go_main(message: Message):
     # user_data[message.from_user.id] = 0
     # print(message.from_user.id)
@@ -35,17 +46,10 @@ async def go_main(message: Message):
 
 @router.message(F.photo)
 async def download_photo(message: Message, bot: Bot):
-    uid.append(message.from_user.id)
+    if not message.from_user.id in users:
+        users[message.from_user.id] = TelegramUser()
     print(message.from_user.id)
-    print(type(message.from_user.id))
     fp = io.BytesIO()
-    # current_images.append(message.photo[-1])
-    # print(len(current_images))
-    # print(current_images)
-    # await bot.download(
-    #    message.photo[-1],
-    #   destination=f"C:/Users\myzg\Desktop/frombot/{message.photo[-1].file_id}.jpg"
-    # )
     print(fp.read())
     await bot.download(
         message.photo[-1],
@@ -54,42 +58,40 @@ async def download_photo(message: Message, bot: Bot):
     current_images.append(fp.read())
 
     fp.flush()
-    if (csb[0] == 'nan'):
+    print(users[message.from_user.id].current_send_button_id)
+    if (users[message.from_user.id].current_send_button_id == -1):
         print('first')
     else:
-        await bot.delete_message(message.chat.id, csb[0].message_id)
+        await bot.delete_message(message.chat.id, users[message.from_user.id].current_send_button_id)
     ans = await message.answer(
         "Нажмите отправить, когда закончите ",
         reply_markup=get_upload_btn()
     )
-    csb[0] = ans
+    users[message.from_user.id].current_send_button_id = ans.message_id
+    print(users[message.from_user.id].current_send_button_id)
 
 
-
-
-async def send_images_with_bboxes(message, imges_with_bboxes,bboxes):
+async def send_images_with_bboxes(message, imges_with_bboxes, bboxes,user_id:int):
     # imges_with_bboxes[0].show()
+    print(message.from_user.id)
     j = 0
     for img in imges_with_bboxes:
+        users[user_id].selected.append([False]*len(bboxes[j]))
+        # i = 1
+        # buttons = [[]]
+        # for button in bboxes[j]:
+        #     buttons[0].append(types.InlineKeyboardButton(text=str(i), callback_data=f'facebutton_{len(imges_with_bboxes)}_{j}_{i-1}'), )
+        #     i = i + 1
+        # j = j + 1
 
-        i = 1
-        buttons = [
-            [
-                # types.InlineKeyboardButton(text="1", callback_data="main_beats"),
-                # types.InlineKeyboardButton(text="2", callback_data="main_service")
-            ]
-        ]
-        for button in bboxes[j]:
-            buttons[0].append(types.InlineKeyboardButton(text=str(i), callback_data="main_beats"),)
-            i=i+1
-        j=j+1
-        i = 1
         # img.show()
         buf = io.BytesIO()
         img.save(buf, format='JPEG')
         # print(buf.getvalue())
-
-        keyboard = types.InlineKeyboardMarkup(inline_keyboard=buttons)
+        print("keygen data")
+        print(f'{len(bboxes[j])}      {len(imges_with_bboxes)}')
+        keyboard = gen_select_face_keyboard(j,len(imges_with_bboxes),len(bboxes[j]))
+        j = j + 1
         await message.answer_photo(
             BufferedInputFile(
                 buf.getvalue(),
@@ -97,19 +99,41 @@ async def send_images_with_bboxes(message, imges_with_bboxes,bboxes):
             ), reply_markup=keyboard
         )
         buf.close()
+    print(users[user_id].selected)
+
+
+@router.callback_query(F.data.startswith("facebutton"))
+async def callbacks_num(callback: types.CallbackQuery):
+        print(callback.message.message_id)
+        print("айдишка папы калбэка кнопки:")
+        print(callback.from_user.id)
+        print(callback.data.split("_")[1:])
+        users[callback.from_user.id].selected[int(callback.data.split("_")[2])][int(callback.data.split("_")[3])] = not users[callback.from_user.id].selected[int(callback.data.split("_")[2])][int(callback.data.split("_")[3])]
+        print(users[callback.from_user.id].selected)
+
+        print(users[callback.from_user.id].selected[int(callback.data.split("_")[2])])
+        await callback.message.edit_reply_markup(reply_markup=gen_select_face_keyboard(int(callback.data.split("_")[2]),int(callback.data.split("_")[1]),len(users[callback.from_user.id].selected[int(callback.data.split("_")[2])]),users[callback.from_user.id].selected))
+        await callback.answer()
+
+
+
+
 
 
 @router.callback_query(F.data.startswith("send_backend"))
 async def callbacks_num(callback: types.CallbackQuery):
+    print("айдишка папы калбэка:")
+    print(callback.from_user.id)
 
-    client_existing = Client(cookies={"user_id": str(uid[0])})
+    user_id = callback.from_user.id
+    client_existing = Client(cookies={"user_id": str(user_id)})
     # print(len(current_images))
     images = []
     base64images = []
+    users
     for image in current_images:
         # buffer = io.BytesIO()
         image = Image.open(io.BytesIO(image))
-
 
         images.append(image)
         # image.show()
@@ -120,7 +144,6 @@ async def callbacks_num(callback: types.CallbackQuery):
         myimage = buffer.getvalue()
         # print(base64.b64encode(myimage)[1500:1530])
         base64images.append(base64.b64encode(myimage))
-    print(uid[0])
     images_idss = {}
 
     images_to_extract = Images()
@@ -144,28 +167,14 @@ async def callbacks_num(callback: types.CallbackQuery):
         imge = draw_rect(decode_img(images_idss[response["image_ids"][i]]), response["bboxes"][i])
         imges_with_bboxes.append(imge)
         # imge.show()
-    await send_images_with_bboxes(callback.message, imges_with_bboxes,response["bboxes"])
-    # faces = SelectFace()
-    # random.seed(131231)
-    #
-    # for i in range(len(response["image_ids"])):
-    #     faces.id[response["image_ids"][i]] = (0)
-    # response = client.post(URL + "/select_faces", json=faces.dict())
-    # print(response.json())
-    # faces = SelectFace()
-    # random.seed(131231)
-    # for i in range(len(response)):
-    #     faces.id[response["image_ids"][i]] = (int(random.random() * (len(response["bboxes"][i]) - 1)))
-    # response = client.post(URL + "/select_faces", json=faces.dict())
-    # assert response.status_code == 200
-    # assert len(response.json()["table"]) == len(faces.id)
-    # assert len(response.json()["table"][0]) == len(faces.id)
+    await send_images_with_bboxes(callback.message, imges_with_bboxes, response["bboxes"],user_id)
+
     await callback.answer()
 
 
 @router.message(Command("select"))
 async def send_selected(message: Message):
-    client_existing = Client(cookies={"user_id": str(uid[0])})
+    client_existing = Client(cookies={"user_id": str(message.from_user.id)})
     client = client_existing
     faces = SelectFace()
 
@@ -181,23 +190,32 @@ async def send_selected(message: Message):
 
     tab = response.json()["table"]
 
-    line=''
+    line = ''
     for row in tab[0]:
         line = line + '========'
-    text= line +'\n'
+    text = line + '\n'
     for row in tab:
         print(row)
         for el in row:
-            text = text + f'{round(el,1)}% ||'
-        text = text + '\n'+line+'\n'
+            text = text + f'{round(el, 1)}% ||'
+        text = text + '\n' + line + '\n'
 
     await message.reply(text=text)
     # await message.reply(text=f'{tab[0]} \n {tab[1]}')
+
+
 @router.message(Command("multi"))
 async def send_selected(message: Message):
-    client_existing = Client(cookies={"user_id": str(uid[0])})
+    client_existing = Client(cookies={"user_id": str(message.from_user.id)})
     client = client_existing
     faces = SelectFace()
+    for i in range(len(images_ids)):
+        fass=[]
+        for j in range(len(users[message.from_user.id].selected[i])):
+            if users[message.from_user.id].selected[i][j]:
+                fass.append(j)
+        faces.id[images_ids[i]]=fass
+
 
     selected = message.text.split(" ")[1:]
 
@@ -206,21 +224,21 @@ async def send_selected(message: Message):
     #         print('skipped')
     #     else:
     #         faces.id[images_ids[i]] = int(selected[i]) - 1
-    faces.id[images_ids[0]] = [0, 1]
-    faces.id[images_ids[1]] = [0]
+    # faces.id[images_ids[0]] = [0, 1]
+    # faces.id[images_ids[1]] = [0]
     response = client.post(URL + "/select_faces", json=faces.dict())
 
     tab = response.json()["table"]
 
-    line=''
+    line = ''
     for row in tab[0]:
         line = line + '========'
-    text= line +'\n'
+    text = line + '\n'
     for row in tab:
         print(row)
         for el in row:
-            text = text + f'{round(el,1)}% ||'
-        text = text + '\n'+line+'\n'
+            text = text + f'{round(el, 1)}% ||'
+        text = text + '\n' + line + '\n'
 
     await message.reply(text=text)
     # await message.reply(text=f'{tab[0]} \n {tab[1]}')
@@ -228,7 +246,7 @@ async def send_selected(message: Message):
 
 @router.message()
 async def send_echo(message: Message):
-    await message.reply(text=f'{message.text}   |||тут самая последняя обработка|||')
+    await message.reply(text=f'Это не Фото!!!  |||тут самая последняя обработка|||')
 
 
 def decode_img(msg):
@@ -243,11 +261,11 @@ def decode_img(msg):
 def draw_rect(img, bboxes):
     img1 = ImageDraw.Draw(img)
     font = ImageFont.truetype("arial.ttf", 50)
-    i=1
+    i = 1
 
-    withh=5
+    withh = 5
     for bbox in bboxes:
         img1.rectangle((bbox[0], bbox[1], bbox[2], bbox[3]), outline="red", width=withh)
-        img1.text((bbox[0]+withh, bbox[1]+withh), str(i), (255, 255, 255), font=font)
-        i=i+1
+        img1.text((bbox[0] + withh, bbox[1] + withh), str(i), (255, 255, 255), font=font)
+        i = i + 1
     return img
