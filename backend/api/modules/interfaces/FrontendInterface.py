@@ -12,6 +12,6 @@ class SelectFaces(BaseModel):
 
 
 class SelectFace(BaseModel):
-    id: Dict[str, int] = pydantic.Field(default={}, example=None,
+    id: Dict[str, List[int]] = pydantic.Field(default={}, example=None,
                                               description='Dictionary of image IDs with selected face')
 
