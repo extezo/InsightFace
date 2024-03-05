@@ -1,4 +1,4 @@
-from telegrambot.handlers import images_events2,images_events
+from telegrambot.handlers import images_events2,images_events3
 
 from aiogram import Bot, Dispatcher
 from aiogram.enums import ContentType
@@ -27,7 +27,7 @@ async def main():
     bot = Bot(token=os.environ['telegramBotToken'])
     dp = Dispatcher()
 
-    dp.include_routers(images_events2.router)
+    dp.include_routers(images_events3.router)
 
 
     # @dp.message()

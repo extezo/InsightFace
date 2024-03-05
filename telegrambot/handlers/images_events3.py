@@ -28,10 +28,9 @@ from PIL import Image, ImageDraw
 # redis = Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
 
 router = Router()  # [1]
-current_images = []
+
 uid = []
 client = Client()
-images_ids = []
 
 URL = "http://26.113.24.68:8000"
 
@@ -47,8 +46,11 @@ async def go_main(message: Message):
 
 @router.message(F.photo)
 async def download_photo(message: Message, bot: Bot):
+
     if not message.from_user.id in users:
         users[message.from_user.id] = TelegramUser()
+    print("len curr img in download")
+    print(len(users[message.from_user.id].current_images))
     if users[message.from_user.id].is_compare_phase:
         await bot.delete_message(message.chat.id, message.message_id)
         if (users[message.from_user.id].current_error_send_id == -1):
@@ -65,10 +67,10 @@ async def download_photo(message: Message, bot: Bot):
             message.photo[-1],
             destination=fp
         )
-        current_images.append(fp.read())
+        users[message.from_user.id].current_images.append(fp.read())
 
-        fp.flush()
-        print(users[message.from_user.id].current_send_button_id)
+        fp.close()
+
         if (users[message.from_user.id].current_send_button_id == -1):
             print('first')
         else:
@@ -78,12 +80,12 @@ async def download_photo(message: Message, bot: Bot):
             reply_markup=get_upload_btn()
         )
         users[message.from_user.id].current_send_button_id = ans.message_id
-        print(users[message.from_user.id].current_send_button_id)
+
 
 
 async def send_images_with_bboxes(message, imges_with_bboxes, bboxes, user_id: int,bot: Bot):
     # imges_with_bboxes[0].show()
-    print(message.from_user.id)
+
     j = 0
     await bot.send_message(chat_id=message.chat.id,text="Нажмите ОЧИСТИТЬ, чтобы обнулить сессию и начать заново", reply_markup=get_clear_button())
     for img in imges_with_bboxes:
@@ -99,8 +101,7 @@ async def send_images_with_bboxes(message, imges_with_bboxes, bboxes, user_id: i
         buf = io.BytesIO()
         img.save(buf, format='JPEG')
         # print(buf.getvalue())
-        print("keygen data")
-        print(f'{len(bboxes[j])}      {len(imges_with_bboxes)}')
+
         keyboard = gen_select_face_keyboard(j, len(imges_with_bboxes), len(bboxes[j]))
         j = j + 1
         await message.answer_photo(
@@ -111,20 +112,14 @@ async def send_images_with_bboxes(message, imges_with_bboxes, bboxes, user_id: i
         )
         buf.close()
 
-    print(users[user_id].selected)
 
 
 @router.callback_query(F.data.startswith("facebutton"))
 async def callbacks_num(callback: types.CallbackQuery):
-    print(callback.message.message_id)
-    print("айдишка папы калбэка кнопки:")
-    print(callback.from_user.id)
-    print(callback.data.split("_")[1:])
+
     users[callback.from_user.id].selected[int(callback.data.split("_")[2])][int(callback.data.split("_")[3])] = not \
     users[callback.from_user.id].selected[int(callback.data.split("_")[2])][int(callback.data.split("_")[3])]
-    print(users[callback.from_user.id].selected)
 
-    print(users[callback.from_user.id].selected[int(callback.data.split("_")[2])])
     await callback.message.edit_reply_markup(
         reply_markup=gen_select_face_keyboard(int(callback.data.split("_")[2]), int(callback.data.split("_")[1]), len(
             users[callback.from_user.id].selected[int(callback.data.split("_")[2])]),
@@ -135,16 +130,16 @@ async def callbacks_num(callback: types.CallbackQuery):
 @router.callback_query(F.data.startswith("send_backend"))
 async def callbacks_num(callback: types.CallbackQuery):
     users[callback.from_user.id].is_compare_phase = True
-    print("айдишка папы калбэка:")
-    print(callback.from_user.id)
+
 
     user_id = callback.from_user.id
     client_existing = Client(cookies={"user_id": str(user_id)})
-    # print(len(current_images))
+    print("len curr img")
+    print(len(users[callback.from_user.id].current_images))
     images = []
     # base64images = []
 
-    for image in current_images:
+    for image in users[callback.from_user.id].current_images:
         # buffer = io.BytesIO()
         image = Image.open(io.BytesIO(image))
 
@@ -157,6 +152,7 @@ async def callbacks_num(callback: types.CallbackQuery):
         myimage = buffer.getvalue()
         # print(base64.b64encode(myimage)[1500:1530])
         users[callback.from_user.id].base64images.append(base64.b64encode(myimage))
+    images_idss = {}
 
     images_to_extract = Images()
     for image in users[callback.from_user.id].base64images:
@@ -165,18 +161,22 @@ async def callbacks_num(callback: types.CallbackQuery):
         # print("============")
         # print(image[10:20])
         # print(image.decode('utf-8')[10:20])
-        images_ids.append(md5(image.decode('utf-8').encode()).hexdigest())
-        users[user_id].images_id_dict[md5(image.decode('utf-8').encode()).hexdigest()] = image.decode('utf-8')
+        users[user_id].images_ids.append(md5(image.decode('utf-8').encode()).hexdigest())
+        images_idss[md5(image.decode('utf-8').encode()).hexdigest()] = image.decode('utf-8')
 
     # print(images_idss)
     client = client_existing
     images_to_upload = UploadImages(data=users[callback.from_user.id].base64images)
+    print("len to upload")
+    print(len(users[callback.from_user.id].base64images))
     response = client.post(URL + "/upload_images", json=images_to_upload.dict(), timeout=10.0)
-    print(response.json())
+
     response = response.json()
     imges_with_bboxes = []
+    print("len of ids")
+    print(len(users[user_id].images_ids))
     for i in range(len(response["image_ids"])):
-        imge = draw_rect(decode_img(users[user_id].images_id_dict[response["image_ids"][i]]), response["bboxes"][i])
+        imge = draw_rect(decode_img(images_idss[response["image_ids"][i]]), response["bboxes"][i])
         imges_with_bboxes.append(imge)
         # imge.show()
     await send_images_with_bboxes(callback.message, imges_with_bboxes, response["bboxes"], user_id,callback.bot)
@@ -187,41 +187,45 @@ async def callbacks_num(callback: types.CallbackQuery):
 
 @router.message(F.text.lower().startswith("очистить"))
 async def clear_data(message: Message):
+    current_images=[]
+    print("len curr img after clear")
+    print(len(current_images))
     users[message.from_user.id]=TelegramUser()
+    print(users[message.from_user.id].json)
     await message.bot.send_message(chat_id=message.chat.id, text="Сессия завершена, вы снова можете отправлять фотографии",reply_markup=types.ReplyKeyboardRemove())
 
 
 
-@router.message(Command("select"))
-async def send_selected(message: Message):
-    client_existing = Client(cookies={"user_id": str(message.from_user.id)})
-    client = client_existing
-    faces = SelectFace()
-
-    selected = message.text.split(" ")[1:]
-
-    for i in range(len(images_ids)):
-        if selected[i] == 'x':
-            print('skipped')
-        else:
-            faces.id[images_ids[i]] = int(selected[i]) - 1
-
-    response = client.post(URL + "/select_face", json=faces.dict())
-
-    tab = response.json()["table"]
-
-    line = ''
-    for row in tab[0]:
-        line = line + '========'
-    text = line + '\n'
-    for row in tab:
-        print(row)
-        for el in row:
-            text = text + f'{round(el, 1)}% ||'
-        text = text + '\n' + line + '\n'
-
-    await message.reply(text=text)
-    # await message.reply(text=f'{tab[0]} \n {tab[1]}')
+# @router.message(Command("select"))
+# async def send_selected(message: Message):
+#     client_existing = Client(cookies={"user_id": str(message.from_user.id)})
+#     client = client_existing
+#     faces = SelectFace()
+#
+#     selected = message.text.split(" ")[1:]
+#
+#     for i in range(len(users[message.from_user.id].images_ids)):
+#         if selected[i] == 'x':
+#             print('skipped')
+#         else:
+#             faces.id[users[message.from_user.id].images_ids[i]] = int(selected[i]) - 1
+#
+#     response = client.post(URL + "/select_face", json=faces.dict())
+#
+#     tab = response.json()["table"]
+#
+#     line = ''
+#     for row in tab[0]:
+#         line = line + '========'
+#     text = line + '\n'
+#     for row in tab:
+#         print(row)
+#         for el in row:
+#             text = text + f'{round(el, 1)}% ||'
+#         text = text + '\n' + line + '\n'
+#
+#     await message.reply(text=text)
+#     # await message.reply(text=f'{tab[0]} \n {tab[1]}')
 
 
 @router.message(F.text.lower().startswith("cравнить"))
@@ -229,12 +233,12 @@ async def compare(message: Message):
     client_existing = Client(cookies={"user_id": str(message.from_user.id)})
     client = client_existing
     faces = SelectFace()
-    for i in range(len(images_ids)):
+    for i in range(len(users[message.from_user.id].images_ids)):
         fass = []
         for j in range(len(users[message.from_user.id].selected[i])):
             if users[message.from_user.id].selected[i][j]:
                 fass.append(j)
-        faces.id[images_ids[i]] = fass
+        faces.id[users[message.from_user.id].images_ids[i]] = fass
 
     selected = message.text.split(" ")[1:]
 
@@ -254,7 +258,7 @@ async def compare(message: Message):
         line = line + '========'
     text = line + '\n'
     for row in tab:
-        print(row)
+
         for el in row:
             text = text + f'{round(el, 1)}% ||'
         text = text + '\n' + line + '\n'
@@ -265,7 +269,7 @@ async def compare(message: Message):
 
 @router.message()
 async def send_echo(message: Message):
-    print(message.text.lower())
+
     await message.reply(text=f'Пожалуйста, для начала работы пришлите фотографию (-и)')
 
 
