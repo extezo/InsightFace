@@ -71,3 +71,11 @@ services:
     expose:
       - "$REDIS_PORT"
     command: "redis-server /usr/local/etc/redis/redis.conf --port $REDIS_PORT"
+
+  tgbot:
+    env_file:
+      - telegrambot/tgbot.env
+      - .env
+    build:
+      context: ./telegrambot
+      dockerfile: Dockerfile

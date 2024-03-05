@@ -12,6 +12,7 @@ URL = "http://localhost:8000"
 def test_alive():
     #client = client_existing
     response = client.post(URL+"/test_alive")
+    print(response.read())
     assert response.status_code == 200
     assert "Offline" not in response.json().values()
     # assert response.json() == {"msg": "I am alive!"}
@@ -31,9 +32,10 @@ def test_upload_images_and_select_faces():
 
     response = response.json()
     faces = SelectFaces()
-    random.seed(12312312312)
+    random.seed(56491)
     for i in range(len(response["image_ids"])):
-        faces.id[response["image_ids"][i]] = np.arange(1 + int(random.random() * (len(response["bboxes"][i])-1))).tolist()
+        faces.id[response["image_ids"][i]] = (
+            np.arange(1 + int(random.random() * (len(response["bboxes"][i])-1))).tolist())
     response = client.post(URL+"/select_faces", json=faces.model_dump())
     assert response.status_code == 200
     table_size = 0

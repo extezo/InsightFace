@@ -1,0 +1,7 @@
+aiogram
+asyncio
+numpy
+emoji
+pillow
+redis
+httpx
