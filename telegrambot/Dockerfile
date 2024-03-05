@@ -12,6 +12,7 @@ COPY ./api /app/telegrambot/api
 COPY ./handlers /app/telegrambot/handlers
 COPY ./keyboards /app/telegrambot/keyboards
 COPY basic.py /app
+COPY resources/ /app/telegrambot/resources
 RUN echo "" > /app/telegrambot/init.py
 
 ENTRYPOINT ["python"]

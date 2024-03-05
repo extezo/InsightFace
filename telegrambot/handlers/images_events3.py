@@ -298,7 +298,7 @@ def decode_img(msg):
 
 def draw_rect(img, bboxes):
     img1 = ImageDraw.Draw(img)
-    font = ImageFont.truetype("arial.ttf", 50)
+    font = ImageFont.truetype("telegrambot/resources/arial.ttf", 50)
     i = 1
 
     withh = 5
