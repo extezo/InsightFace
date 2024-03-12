@@ -36,20 +36,21 @@ def get_clear_button():
     return keyboard
 
 
-def get_upload_button(id: int):
-    buttons = [
-        [types.InlineKeyboardButton(text="Отправить", callback_data=f"send_backend_{id}")],
-    ]
-    keyboard = types.InlineKeyboardMarkup(inline_keyboard=buttons)
-    return keyboard
-
-
 def get_upload_btn():
     buttons = [
         [types.InlineKeyboardButton(text="⬆ Отправить ⬆", callback_data="send_backend")],
     ]
     keyboard = types.InlineKeyboardMarkup(inline_keyboard=buttons)
     return keyboard
+
+def get_null_inline():
+    buttons = [
+        [types.InlineKeyboardButton(text="", callback_data="11")],
+    ]
+    keyboard = types.InlineKeyboardMarkup(inline_keyboard=buttons)
+    return keyboard
+
+
 
 
 def gen_select_face_keyboard(j: int, len_imgs: int, len_faces: int, is_pressed=[[]]):

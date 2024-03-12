@@ -1,20 +1,15 @@
-import os
-import random
-from typing import Dict, Any
-import numpy as np
+from typing import List
 
-import emoji
 from PIL import ImageFont
 from aiogram import types
 import io
 from hashlib import md5
 from aiogram import Router, F, Bot
 from aiogram.filters import Command
-from aiogram.types import Message, InputFile, BufferedInputFile
-from redis.asyncio import Redis
+from aiogram.types import Message, InputFile, BufferedInputFile, InlineKeyboardMarkup
 
-from telegrambot.keyboards.keyboards import get_upload_button, get_upload_btn, \
-    gen_select_face_keyboard, get_clear_button
+from telegrambot.keyboards.keyboards import get_upload_btn, \
+    gen_select_face_keyboard, get_clear_button,get_null_inline
 import base64
 from httpx import Client
 from telegrambot.api.modules.interfaces.FrontendInterface import UploadImages, SelectFace
@@ -48,8 +43,7 @@ async def go_main(message: Message):
 async def download_photo(message: Message, bot: Bot):
     if not message.from_user.id in users:
         users[message.from_user.id] = TelegramUser()
-    print("len curr img in download")
-    print(len(users[message.from_user.id].current_images))
+
     if users[message.from_user.id].is_compare_phase:
         await bot.delete_message(message.chat.id, message.message_id)
         if (users[message.from_user.id].current_error_send_id == -1):
@@ -59,79 +53,103 @@ async def download_photo(message: Message, bot: Bot):
         err = await message.answer("❌ Вы не можете отправлять фотографии до обнуления! ❌")
         users[message.from_user.id].current_error_send_id = err.message_id
     else:
-        # print(message.from_user.id)
+
+        # if (users[message.from_user.id].current_send_button_id == []):
+        #     print('first')
+        #
+        # else:
+        #     print("deleting")
+            # await bot.delete_message(message.chat.id, users[message.from_user.id].current_send_button_id)
+        ans = await message.bot.send_message(chat_id=message.from_user.id,
+                                             text="Нажмите отправить, когда закончите добавлять фото.\n⚠⚠⚠\nПосле отправки добавление фото станет невозможным ",
+                                             reply_markup=get_upload_btn()
+                                             )
+        users[message.from_user.id].current_send_button_id.append(ans.message_id)
+        if len(users[message.from_user.id].current_send_button_id)==1:
+            print("ffff")
+        else:
+            await bot.delete_message(message.chat.id, users[message.from_user.id].current_send_button_id[-2])
+            users[message.from_user.id].current_send_button_id.remove(users[message.from_user.id].current_send_button_id[-2])
+        print(users[message.from_user.id].current_send_button_id)
         fp = io.BytesIO()
-        # print(fp.read())
+
         await bot.download(
             message.photo[-1],
             destination=fp
         )
-        users[message.from_user.id].current_images.append(fp.read())
+        fpr=fp.read()
+        if fpr in users[message.from_user.id].current_images:
+            print("image already exists")
+        else:
+         users[message.from_user.id].current_images.append(fpr)
 
         fp.close()
 
-        if (users[message.from_user.id].current_send_button_id == -1):
-            print('first')
-        else:
-            await bot.delete_message(message.chat.id, users[message.from_user.id].current_send_button_id)
-        ans = await message.answer(
-            "Нажмите отправить, когда закончите добавлять фото.\n⚠⚠⚠\nПосле отправки добавление фото станет невозможным ",
-            reply_markup=get_upload_btn()
-        )
-        users[message.from_user.id].current_send_button_id = ans.message_id
+
 
 
 async def send_images_with_bboxes(message, imges_with_bboxes, bboxes, user_id: int, bot: Bot):
-    # imges_with_bboxes[0].show()
+
 
     j = 0
     await bot.send_message(chat_id=message.chat.id, text="Нажмите ОЧИСТИТЬ, чтобы обнулить сессию и начать заново",
                            reply_markup=get_clear_button())
     for img in imges_with_bboxes:
-        users[user_id].selected.append([False] * len(bboxes[j]))
-        # i = 1
-        # buttons = [[]]
-        # for button in bboxes[j]:
-        #     buttons[0].append(types.InlineKeyboardButton(text=str(i), callback_data=f'facebutton_{len(imges_with_bboxes)}_{j}_{i-1}'), )
-        #     i = i + 1
-        # j = j + 1
 
-        # img.show()
         buf = io.BytesIO()
         img.save(buf, format='JPEG')
-        # print(buf.getvalue())
 
         keyboard = gen_select_face_keyboard(j, len(imges_with_bboxes), len(bboxes[j]))
         j = j + 1
-        await message.answer_photo(
+        ph = await message.answer_photo(
             BufferedInputFile(
                 buf.getvalue(),
                 filename="image from buffer.jpg"
             ), reply_markup=keyboard
         )
+
+        users[user_id].sent_images_ids.append(ph.message_id)
+
         buf.close()
 
 
 @router.callback_query(F.data.startswith("facebutton"))
 async def callbacks_num(callback: types.CallbackQuery):
-    users[callback.from_user.id].selected[int(callback.data.split("_")[2])][int(callback.data.split("_")[3])] = not \
-        users[callback.from_user.id].selected[int(callback.data.split("_")[2])][int(callback.data.split("_")[3])]
 
-    await callback.message.edit_reply_markup(
-        reply_markup=gen_select_face_keyboard(int(callback.data.split("_")[2]), int(callback.data.split("_")[1]), len(
-            users[callback.from_user.id].selected[int(callback.data.split("_")[2])]),
-                                              users[callback.from_user.id].selected))
+    if  users[callback.from_user.id].selected[int(callback.data.split("_")[2])][int(callback.data.split("_")[3])]:
+        users[callback.from_user.id].selected_num=users[callback.from_user.id].selected_num-1
+    else:
+        users[callback.from_user.id].selected_num = users[callback.from_user.id].selected_num +1
+    if(users[callback.from_user.id].selected_num >8):
+
+        users[callback.from_user.id].selected_num = users[callback.from_user.id].selected_num - 1
+        if (users[callback.from_user.id].current_error_too_many_selected == -1):
+            print('first err too many')
+        else:
+            await callback.bot.delete_message(callback.from_user.id, users[callback.from_user.id].current_error_too_many_selected)
+        err = await callback.bot.send_message(callback.from_user.id,"❌ Вы не можете выбрать более 8 лиц ❌")
+        users[callback.from_user.id].current_error_too_many_selected = err.message_id
+    else:
+        users[callback.from_user.id].selected[int(callback.data.split("_")[2])][int(callback.data.split("_")[3])] = not \
+            users[callback.from_user.id].selected[int(callback.data.split("_")[2])][int(callback.data.split("_")[3])]
+
+        await callback.message.edit_reply_markup(
+            reply_markup=gen_select_face_keyboard(int(callback.data.split("_")[2]), int(callback.data.split("_")[1]), len(
+                users[callback.from_user.id].selected[int(callback.data.split("_")[2])]),
+                                                  users[callback.from_user.id].selected))
     await callback.answer()
 
 
 @router.callback_query(F.data.startswith("send_backend"))
-async def callbacks_num(callback: types.CallbackQuery):
+async def send_backend(callback: types.CallbackQuery):
+    for i in range(len(users[callback.from_user.id].current_send_button_id)):
+        await callback.bot.delete_message(callback.from_user.id, users[callback.from_user.id].current_send_button_id[i])
     users[callback.from_user.id].is_compare_phase = True
 
     user_id = callback.from_user.id
     client_existing = Client(cookies={"user_id": str(user_id)})
-    print("len curr img")
-    print(len(users[callback.from_user.id].current_images))
+
+
     images = []
     # base64images = []
 
@@ -154,28 +172,32 @@ async def callbacks_num(callback: types.CallbackQuery):
     for image in users[callback.from_user.id].base64images:
         images_to_extract.data.append(image)
     for image in images_to_extract.data:
-        # print("============")
-        # print(image[10:20])
-        # print(image.decode('utf-8')[10:20])
         users[user_id].images_ids.append(md5(image.decode('utf-8').encode()).hexdigest())
         images_idss[md5(image.decode('utf-8').encode()).hexdigest()] = image.decode('utf-8')
 
     # print(images_idss)
     client = client_existing
     images_to_upload = UploadImages(data=users[callback.from_user.id].base64images)
-    print("len to upload")
-    print(len(users[callback.from_user.id].base64images))
+
+
     response = client.post(URL + "/upload_images", json=images_to_upload.dict(), timeout=10.0)
 
     response = response.json()
+    bboxes=response["bboxes"]
+    jj=0
+    for img in images_idss:
+        users[user_id].selected.append([False] * len(bboxes[jj]))
+        users[user_id].current_faces.append([False] * len(bboxes[jj]))
+        jj=jj+1
     imges_with_bboxes = []
     print("len of ids")
     print(len(users[user_id].images_ids))
     for i in range(len(response["image_ids"])):
-        imge = draw_rect(decode_img(images_idss[response["image_ids"][i]]), response["bboxes"][i])
+        imge = draw_rect(decode_img(images_idss[response["image_ids"][i]]), response["bboxes"][i],
+                         callback.from_user.id,i)
         imges_with_bboxes.append(imge)
         # imge.show()
-    await send_images_with_bboxes(callback.message, imges_with_bboxes, response["bboxes"], user_id, callback.bot)
+    await send_images_with_bboxes(callback.message, imges_with_bboxes, bboxes, user_id, callback.bot)
 
     await callback.answer()
 
@@ -183,45 +205,16 @@ async def callbacks_num(callback: types.CallbackQuery):
 @router.message(F.text.lower().startswith("очистить"))
 async def clear_data(message: Message):
     current_images = []
-    print("len curr img after clear")
-    print(len(current_images))
+
+    for messid in users[message.from_user.id].sent_images_ids:
+        await message.bot.edit_message_reply_markup(chat_id=message.from_user.id,message_id=messid)
+
     users[message.from_user.id] = TelegramUser()
-    print(users[message.from_user.id].json)
+
     await message.bot.send_message(chat_id=message.chat.id,
                                    text="Сессия завершена, вы снова можете отправлять фотографии",
                                    reply_markup=types.ReplyKeyboardRemove())
 
-
-# @router.message(Command("select"))
-# async def send_selected(message: Message):
-#     client_existing = Client(cookies={"user_id": str(message.from_user.id)})
-#     client = client_existing
-#     faces = SelectFace()
-#
-#     selected = message.text.split(" ")[1:]
-#
-#     for i in range(len(users[message.from_user.id].images_ids)):
-#         if selected[i] == 'x':
-#             print('skipped')
-#         else:
-#             faces.id[users[message.from_user.id].images_ids[i]] = int(selected[i]) - 1
-#
-#     response = client.post(URL + "/select_face", json=faces.dict())
-#
-#     tab = response.json()["table"]
-#
-#     line = ''
-#     for row in tab[0]:
-#         line = line + '========'
-#     text = line + '\n'
-#     for row in tab:
-#         print(row)
-#         for el in row:
-#             text = text + f'{round(el, 1)}% ||'
-#         text = text + '\n' + line + '\n'
-#
-#     await message.reply(text=text)
-#     # await message.reply(text=f'{tab[0]} \n {tab[1]}')
 
 
 @router.message(F.text.lower().startswith("cравнить"))
@@ -230,55 +223,31 @@ async def compare(message: Message):
     client = client_existing
     faces = SelectFace()
     strs_compared = []
+    images_of_faces=[]
     for i in range(len(users[message.from_user.id].images_ids)):
         fass = []
         for j in range(len(users[message.from_user.id].selected[i])):
             if users[message.from_user.id].selected[i][j]:
                 fass.append(j)
+                images_of_faces.append(users[message.from_user.id].current_faces[i][j])
                 strs_compared.append(f"i:{i + 1}  f:{j + 1}")
         print("is there warn")
         faces.id[users[message.from_user.id].images_ids[i]] = fass
 
-    # selected = message.text.split(" ")[1:]
-
-    # for i in range(len(images_ids)):
-    #     if selected[i] == 'x':
-    #         print('skipped')
-    #     else:
-    #         faces.id[images_ids[i]] = int(selected[i]) - 1
-    # faces.id[images_ids[0]] = [0, 1]
-    # faces.id[images_ids[1]] = [0]
     response = client.post(URL + "/select_faces", json=faces.dict())
 
     tab = response.json()["table"]
-    legend = 'i — image   f — face '
-    line = ''
-    topline = ''
-    print(tab)
-    print(len(tab[0]))
-    print(strs_compared)
-    # for i in range(tab[0]):
-    #     topline = topline + strs_compared[i] + " ||"
-    #     line = line + '========'
-    for ta in strs_compared:
-        topline = topline + ta+" ||"
-        line = line + '========'
-    text = legend + "\n\n\n"
-    text = text + topline + '\n'
-    text = text + line + '\n'
-    i = 0
-    for row in tab:
+    rep_img=table2png(tab,images_of_faces)
 
-        for el in row:
-            text = text + f'{round(el, 1)}% ||'
-
-            text = text
-
-        text = text + strs_compared[i]
-        i=i+1
-        text = text + '\n' + line + '\n'
-
-    await message.reply(text=text)
+    buf = io.BytesIO()
+    rep_img.save(buf, format='JPEG')
+    await message.answer_photo(
+        BufferedInputFile(
+            buf.getvalue(),
+            filename="table.jpg"
+        )
+    )
+    buf.close()
     # await message.reply(text=f'{tab[0]} \n {tab[1]}')
 
 
@@ -296,14 +265,50 @@ def decode_img(msg):
     return img
 
 
-def draw_rect(img, bboxes):
+def draw_rect(img, bboxes, id: int,im_num:int):
     img1 = ImageDraw.Draw(img)
     font = ImageFont.truetype("telegrambot/resources/arial.ttf", 50)
     i = 1
 
     withh = 5
     for bbox in bboxes:
+        face = img.crop((bbox[0], bbox[1], bbox[2], bbox[3]))
+        users[id].current_faces[im_num][i - 1] = face
+        i = i + 1
+    i=1
+    for bbox in bboxes:
+
+
+        # face.show()
         img1.rectangle((bbox[0], bbox[1], bbox[2], bbox[3]), outline="red", width=withh)
         img1.text((bbox[0] + withh, bbox[1] + withh), str(i), (255, 255, 255), font=font)
         i = i + 1
     return img
+
+def table2png(table:List[List[int]] = [[0,0],[0,0]],tops =[1,2]):
+    cellsize=200
+    fontsize=40
+    item_margin=2
+    image= Image.new('RGB', (cellsize*(len(table)+1),(cellsize*(len(table)+1))), (0,0,0))
+    for i in range(len(table)):
+        font = ImageFont.truetype("telegrambot/resources/arial.ttf", fontsize)
+        sootn=tops[i].size[0]/tops[i].size[1]
+        im2 = tops[i].resize((round(cellsize*sootn),cellsize))
+        # im22 = ImageDraw.Draw(im2)
+        # im22.text((cellsize / 4, cellsize / 4), str(tops[i]), (255, 255, 255), font=font)
+        margin_left=(cellsize-im2.size[0])/2
+        image.paste(im2, ((i + 1) * cellsize+round(margin_left), 0))
+        image.paste(im2, (round(margin_left), (i + 1) * cellsize))
+        for j in range(len(table[i])):
+            if table[i][j]>80:
+                col=(102, 255, 0)
+            elif table[i][j]>70:
+                col=(248, 243, 24)
+            else:
+                col = (255, 36, 0)
+            font = ImageFont.truetype("telegrambot/resources/arial.ttf", fontsize)
+            im = Image.new('RGB', (cellsize-(item_margin*2), cellsize-(item_margin*2)), col)
+            im1 = ImageDraw.Draw(im)
+            im1.text(((cellsize/2-fontsize/2)-fontsize, (cellsize/2-fontsize/2)), str(round(table[i][j],1))+"%", (0,0,0), font=font)
+            image.paste(im,((j+1)*cellsize+item_margin,(i+1)*cellsize+item_margin))
+    return image
