@@ -13,6 +13,7 @@ class TelegramUser(BaseModel):
     is_compare_phase: Optional[bool] = Field(default=False)
     current_error_send_id: int = Field(default=-1)
     current_error_too_many_selected: int = Field(default=-1)
+    current_error_too_few_selected: int = Field(default=-1)
     base64images: List[str] = Field(default=[])
     current_images: list = Field(default=[])
     current_faces: List[int] = Field(default=[])

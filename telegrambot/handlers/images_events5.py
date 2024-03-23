@@ -92,7 +92,7 @@ async def send_images_with_bboxes(message, imges_with_bboxes, bboxes, user_id: i
 
 
     j = 0
-    await bot.send_message(chat_id=message.chat.id, text="Нажмите ОЧИСТИТЬ, чтобы обнулить сессию и начать заново",
+    await bot.send_message(chat_id=message.chat.id, text="⚠ Нажмите ОЧИСТИТЬ, чтобы обнулить сессию и начать заново\n\n⚠ Нажимайте на кнопки под фотографиями, чтобы выбрать лица, которые вы хотите сравнить",
                            reply_markup=get_clear_button())
     for img in imges_with_bboxes:
 
@@ -219,36 +219,45 @@ async def clear_data(message: Message):
 
 @router.message(F.text.lower().startswith("cравнить"))
 async def compare(message: Message):
-    client_existing = Client(cookies={"user_id": str(message.from_user.id)})
-    client = client_existing
-    faces = SelectFace()
-    strs_compared = []
-    images_of_faces=[]
-    for i in range(len(users[message.from_user.id].images_ids)):
-        fass = []
-        for j in range(len(users[message.from_user.id].selected[i])):
-            if users[message.from_user.id].selected[i][j]:
-                fass.append(j)
-                images_of_faces.append(users[message.from_user.id].current_faces[i][j])
-                strs_compared.append(f"i:{i + 1}  f:{j + 1}")
-        print("is there warn")
-        faces.id[users[message.from_user.id].images_ids[i]] = fass
+    if (users[message.from_user.id].selected_num < 2):
+        if (users[message.from_user.id].current_error_too_few_selected == -1):
+            print('first err too many')
+        else:
+            await message.bot.delete_message(message.from_user.id,
+                                              users[message.from_user.id].current_error_too_few_selected)
+        err = await message.bot.send_message(message.from_user.id, "❌ Выберите как минимум 2 лица ❌")
+        users[message.from_user.id].current_error_too_few_selected = err.message_id
+    else:
+        client_existing = Client(cookies={"user_id": str(message.from_user.id)})
+        client = client_existing
+        faces = SelectFace()
+        strs_compared = []
+        images_of_faces=[]
+        for i in range(len(users[message.from_user.id].images_ids)):
+            fass = []
+            for j in range(len(users[message.from_user.id].selected[i])):
+                if users[message.from_user.id].selected[i][j]:
+                    fass.append(j)
+                    images_of_faces.append(users[message.from_user.id].current_faces[i][j])
+                    strs_compared.append(f"i:{i + 1}  f:{j + 1}")
+            print("is there warn")
+            faces.id[users[message.from_user.id].images_ids[i]] = fass
 
-    response = client.post(URL + "/select_faces", json=faces.dict())
+        response = client.post(URL + "/select_faces", json=faces.dict())
 
-    tab = response.json()["table"]
-    rep_img=table2png(tab,images_of_faces)
+        tab = response.json()["table"]
+        rep_img=table2png(tab,images_of_faces)
 
-    buf = io.BytesIO()
-    rep_img.save(buf, format='JPEG')
-    await message.answer_photo(
-        BufferedInputFile(
-            buf.getvalue(),
-            filename="table.jpg"
+        buf = io.BytesIO()
+        rep_img.save(buf, format='JPEG')
+        await message.answer_photo(
+            BufferedInputFile(
+                buf.getvalue(),
+                filename="table.jpg"
+            )
         )
-    )
-    buf.close()
-    # await message.reply(text=f'{tab[0]} \n {tab[1]}')
+        buf.close()
+        # await message.reply(text=f'{tab[0]} \n {tab[1]}')
 
 
 @router.message()
